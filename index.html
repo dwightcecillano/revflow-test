@@ -18,7 +18,7 @@
 <header class="nav"><div class="wrap"><a class="logo" href="./" aria-label="RevFlow home"><span class="logo-mark"><svg width="16" height="16" viewBox="0 0 32 32"><path d="M9 24V8h8a5 5 0 0 1 0 10h-4l7 6" fill="none" stroke="#07090a" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>RevFlow</a><a class="back" href="./">← Back to website</a></div></header>
 <main class="wrap"><section><span class="tag mono"><span class="dot"></span>revenue / operations / technology</span><h1>Your business,<br><em>in one place.</em></h1><p class="lead">Your dedicated RevFlow workspace for your team, leads, tasks and daily progress.</p><ul class="features"><li>See your team’s work and daily updates</li><li>Keep leads and tasks organized</li><li>Review hours and track progress</li></ul></section>
 <section class="glass" aria-labelledby="login-title"><span class="status mono">PORTAL / IN DEVELOPMENT</span><h2 id="login-title">RevFlow test login</h2><p>RevFlow workspace access is intended for invited clients and authorized team members.</p><div class="notice"><strong>Secure sign-in is not available yet.</strong><p>We are preparing account authentication and private client workspaces. Please do not enter credentials or client information into any demo. Existing clients can contact their RevFlow account manager for assistance.</p></div><div id="authPanel" hidden>
-<form id="signInForm"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required maxlength="320"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required><button class="btn" id="signInBtn" type="submit">Sign in →</button></form>
+<form id="signInForm"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required maxlength="320"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required><button class="btn" id="signInBtn" type="submit">Sign in →</button><button class="btn" id="recover" type="button">Set or reset password</button></form><form id="passwordSetup" hidden><label for="newPassword">New password (at least 12 characters)</label><input id="newPassword" type="password" minlength="12" autocomplete="new-password" required><button class="btn" type="submit">Save password</button></form>
 <div id="memberPanel" hidden><h3>Your workspaces</h3><ul id="workspaceList"></ul><button class="btn" id="signOut" type="button">Sign out</button></div>
 <p id="authMessage" role="status" aria-live="polite"></p></div>
 <a class="btn" id="returnHome" href="./">Return to RevFlow →</a><p class="caption">Account access is invitation-only.</p></section></main>
@@ -28,13 +28,17 @@ const $ = id => document.getElementById(id);
 if (/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(settings.url) && settings.publishableKey.startsWith("sb_publishable_")) {
   try {
     const {createClient} = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
-    const client = createClient(settings.url, settings.publishableKey, {auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}});
+    const client = createClient(settings.url, settings.publishableKey, {auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:true}});
     const form=$("signInForm"), panel=$("memberPanel"), message=$("authMessage"), list=$("workspaceList"), button=$("signInBtn");
+    const recovery = new URLSearchParams(location.hash.slice(1)).get("type")==="recovery" || new URLSearchParams(location.hash.slice(1)).get("type")==="invite";
     const reset=()=>{panel.hidden=true;form.hidden=false;list.replaceChildren();$("password").value="";};
     $("authPanel").hidden=false;
     document.querySelector(".notice").hidden=true;
     document.querySelector(".status").textContent="PORTAL / INVITED ACCESS";
     $("returnHome").hidden=true;
+    $("recover").addEventListener("click",async()=>{if(!$("email").reportValidity())return; const {error}=await client.auth.resetPasswordForEmail($("email").value.trim(),{redirectTo:location.origin+location.pathname});message.textContent=error?"Unable to request password email.":"If authorized, check your email for a password setup link.";});
+    const setup=$("passwordSetup"); const showSetup=()=>{form.hidden=true;setup.hidden=false;message.textContent="Choose a new password.";}; client.auth.onAuthStateChange((event)=>{if(event==="PASSWORD_RECOVERY")showSetup();}); if(recovery){const {data}=await client.auth.getSession();if(data.session)showSetup();}
+    setup.addEventListener("submit",async e=>{e.preventDefault();const {error}=await client.auth.updateUser({password:$("newPassword").value});$("newPassword").value="";if(error){message.textContent="Password update failed. Request a fresh link.";return;}await client.auth.signOut({scope:"local"});setup.hidden=true;reset();message.textContent="Password saved. Sign in now.";});
     form.addEventListener("submit",async e=>{
       e.preventDefault();button.disabled=true;message.textContent="Signing in…";
       try{
