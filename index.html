@@ -28,16 +28,18 @@ const $ = id => document.getElementById(id);
 if (/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(settings.url) && settings.publishableKey.startsWith("sb_publishable_")) {
   try {
     const {createClient} = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+    const recoveryParams = new URLSearchParams(location.hash.slice(1));
+    const recovery = ["recovery","invite"].includes(recoveryParams.get("type"));
     const client = createClient(settings.url, settings.publishableKey, {auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:true}});
     const form=$("signInForm"), panel=$("memberPanel"), message=$("authMessage"), list=$("workspaceList"), button=$("signInBtn");
-    const recovery = new URLSearchParams(location.hash.slice(1)).get("type")==="recovery" || new URLSearchParams(location.hash.slice(1)).get("type")==="invite";
+    
     const reset=()=>{panel.hidden=true;form.hidden=false;list.replaceChildren();$("password").value="";};
     $("authPanel").hidden=false;
     document.querySelector(".notice").hidden=true;
     document.querySelector(".status").textContent="PORTAL / INVITED ACCESS";
     $("returnHome").hidden=true;
     $("recover").addEventListener("click",async()=>{if(!$("email").reportValidity())return; const {error}=await client.auth.resetPasswordForEmail($("email").value.trim(),{redirectTo:location.origin+location.pathname});message.textContent=error?"Unable to request password email.":"If authorized, check your email for a password setup link.";});
-    const setup=$("passwordSetup"); const showSetup=()=>{form.hidden=true;setup.hidden=false;message.textContent="Choose a new password.";}; client.auth.onAuthStateChange((event)=>{if(event==="PASSWORD_RECOVERY")showSetup();}); if(recovery){const {data}=await client.auth.getSession();if(data.session)showSetup();}
+    const setup=$("passwordSetup"); const showSetup=()=>{form.hidden=true;setup.hidden=false;message.textContent="Choose a new password.";}; client.auth.onAuthStateChange((event)=>{if(event==="PASSWORD_RECOVERY")showSetup();}); if(recovery){const {data}=await client.auth.getSession();if(data.session)showSetup();else message.textContent="Recovery link expired or invalid. Request a fresh link."; }
     setup.addEventListener("submit",async e=>{e.preventDefault();const {error}=await client.auth.updateUser({password:$("newPassword").value});$("newPassword").value="";if(error){message.textContent="Password update failed. Request a fresh link.";return;}await client.auth.signOut({scope:"local"});setup.hidden=true;reset();message.textContent="Password saved. Sign in now.";});
     form.addEventListener("submit",async e=>{
       e.preventDefault();button.disabled=true;message.textContent="Signing in…";
